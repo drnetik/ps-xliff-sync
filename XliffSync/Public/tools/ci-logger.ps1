@@ -37,12 +37,12 @@ function Write-CIMessage {
     } else {
         # Fallback für lokale oder nicht unterstützte Umgebungen
         switch ($Type) {
-            "group" { Write-Host "[GROUP] $Message" }
-            "endgroup" { Write-Host "[/GROUP]" }
-            "section" { Write-Host "[SECTION] $Message" }
-            "error" { Write-Host -ForegroundColor Red "[ERROR] $Message" }
-            "warning" { Write-Host -ForegroundColor Yellow "[WARNING] $Message" }
-            default { Write-Host "$Message" }
+            "group"     { Write-Host ""; Write-Host "=== $Message ===" -ForegroundColor Cyan }
+            "endgroup"  { Write-Host "" }
+            "section"   { Write-Host ""; Write-Host "--- $Message ---" -ForegroundColor Cyan }
+            "error"     { Write-Host "[ERROR]   $Message" -ForegroundColor Red }
+            "warning"   { Write-Host "[WARNING] $Message" -ForegroundColor Yellow }
+            default     { Write-Host "[INFO]    $Message" }
         }
     }
 }
