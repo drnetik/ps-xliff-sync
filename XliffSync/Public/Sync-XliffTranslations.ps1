@@ -282,7 +282,7 @@ function Sync-XliffTranslations {
     }
 
     if ($detectSourceTextChanges) {
-        Write-CIMessage -Type ($(if ($detectedSourceTextChanges -lt 1) { "info" } else { "warning" })) -Message "Detected $($detectedSourceTextChanges.Count) source text change(s).";
+        Write-CIMessage -Type ($(if ($detectedSourceTextChanges.Count -lt 1) { "info" } else { "warning" })) -Message "Detected $($detectedSourceTextChanges.Count) source text change(s).";
 
         if ($printProblems -and $detectedSourceTextChanges) {
             $detectedSourceTextChanges | ForEach-Object {
