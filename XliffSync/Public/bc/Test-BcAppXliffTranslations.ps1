@@ -34,41 +34,6 @@
  Specifies additional parameters to pass as arguments to the Test-XliffTranslations function that is invoked by this function.
 #>
 
-function Is-GitHubActions {
-    return [bool]$env:GITHUB_ACTIONS
-}
-
-function Write-CIMessage {
-    param (
-        [Parameter(Mandatory)]
-        [ValidateSet("group", "endgroup", "section", "error", "warning", "info")]
-        [string] $Type,
-
-        [Parameter(Mandatory = $false)]
-        [string] $Message
-    )
-
-    if (Is-GitHubActions) {
-        switch ($Type) {
-            "group" { Write-Host "::group::$Message" }
-            "endgroup" { Write-Host "::endgroup::" }
-            "section" { Write-Host "::group::$Message" }
-            "error" { Write-Host "::error::$Message" }
-            "warning" { Write-Host "::warning::$Message" }
-            default { Write-Host "$Message" }
-        }
-    } else {
-        switch ($Type) {
-            "group" { Write-Host "##[group]$Message" }
-            "endgroup" { Write-Host "##[endgroup]" }
-            "section" { Write-Host "##[section]$Message" }
-            "error" { Write-Host "##vso[task.logissue type=error]$Message" }
-            "warning" { Write-Host "##vso[task.logissue type=warning]$Message" }
-            default { Write-Host "$Message" }
-        }
-    }
-}
-
 function Test-BcAppXliffTranslations {
     Param(
         [Parameter(Mandatory = $false)]
@@ -82,7 +47,7 @@ function Test-BcAppXliffTranslations {
         [Parameter(Mandatory = $false)]
         [string[]] $restrictErrorsToLanguages = @(),
         [Parameter(Mandatory = $false)]
-        [ValidateSet('none', 'error', 'warning')]
+        [ValidateSet('info', 'error', 'warning')]
         [string] $ErrorSeverity = 'warning',
         [switch] $reportProgress,
         [switch] $printProblems,
@@ -128,9 +93,9 @@ function Test-BcAppXliffTranslations {
             }
 
             Write-Host "Syncing to file $($targetXliffFile.FullName)"
-            $unitsWithIssues += Sync-XliffTranslations -sourcePath $baseXliffFile.FullName -targetPath $targetXliffFile.FullName -AzureDevOps $ErrorSeverityForFile -reportProgress:$reportProgress -printProblems:$printProblems -useSelfClosingTags:$useSelfClosingTags -FormatTranslationUnit $FormatTranslationUnit @syncAdditionalParameters
+            $unitsWithIssues += Sync-XliffTranslations -sourcePath $baseXliffFile.FullName -targetPath $targetXliffFile.FullName -ErrorSeverity $ErrorSeverityForFile -reportProgress:$reportProgress -printProblems:$printProblems -useSelfClosingTags:$useSelfClosingTags -FormatTranslationUnit $FormatTranslationUnit @syncAdditionalParameters
             Write-Host "Checking translations in file $($targetXliffFile.FullName)"
-            $unitsWithIssues += Test-XliffTranslations -targetPath $targetXliffFile.FullName -checkForMissing -checkForProblems -translationRules $translationRules -translationRulesEnableAll:$translationRulesEnableAll -AzureDevOps $ErrorSeverityForFile -reportProgress:$reportProgress -FormatTranslationUnit $FormatTranslationUnit -printProblems:$printProblems @testAdditionalParameters
+            $unitsWithIssues += Test-XliffTranslations -targetPath $targetXliffFile.FullName -checkForMissing -checkForProblems -translationRules $translationRules -translationRulesEnableAll:$translationRulesEnableAll -ErrorSeverity $ErrorSeverityForFile -reportProgress:$reportProgress -FormatTranslationUnit $FormatTranslationUnit -printProblems:$printProblems @testAdditionalParameters
 
             $fileIssueCount = $unitsWithIssues.Count
             if ($fileIssueCount -gt 0) {

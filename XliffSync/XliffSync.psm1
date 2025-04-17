@@ -1,6 +1,9 @@
 [cmdletbinding()]
 param()
 
+# Load shared tools (e.g. logger)
+. "$PSScriptRoot\Public\tools\ci-logger.ps1"
+
 # Load Model (e.g., classes)
 $modelList = @(
     'XlfDocument'
