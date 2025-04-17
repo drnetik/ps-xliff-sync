@@ -20,7 +20,7 @@ function Write-CIMessage {
         switch ($Type) {
             "group" { Write-Host "::group::$Message" }
             "endgroup" { Write-Host "::endgroup::" }
-            "section" { Write-Host "::group::$Message" }  # GitHub kennt keinen "section", also wie group
+            "section" { Write-Host "::group::$Message" }  # GitHub does not support "section", treat as "group"
             "error" { Write-Host "::error::$Message" }
             "warning" { Write-Host "::warning::$Message" }
             default { Write-Host "$Message" }
@@ -35,7 +35,7 @@ function Write-CIMessage {
             default { Write-Host "$Message" }
         }
     } else {
-        # Fallback für lokale oder nicht unterstützte Umgebungen
+        # Fallback for local or unsupported environments
         switch ($Type) {
             "group"     { Write-Host ""; Write-Host "=== $Message ===" -ForegroundColor Cyan }
             "endgroup"  { Write-Host "" }
