@@ -43,8 +43,8 @@
   Specifies the target tag content for units where the translation is missing.
  .Parameter unitMaps
   Specifies for which search purposes this command should create in-memory maps in preparation of syncing.
- .Parameter AzureDevOps
-  Specifies whether to generate Azure DevOps Pipeline compatible output. This setting determines the severity of errors.
+ .Parameter ErrorSeverity
+  Specifies whether to generate Azure DevOps Pipeline or GitHub Acitons compatible output. This setting determines the severity of errors.
  .Parameter reportProgress
   Specifies whether the command should report progress.
  .Parameter printProblems
@@ -88,8 +88,8 @@ function Sync-XliffTranslations {
         [ValidateSet("None", "Id", "All")]
         [string] $unitMaps = "All",
         [Parameter(Mandatory = $false)]
-        [ValidateSet('no', 'error', 'warning')]
-        [string] $AzureDevOps = 'no',
+        [ValidateSet('info', 'error', 'warning')]
+        [string] $ErrorSeverity = 'info',
         [switch] $reportProgress,
         [switch] $printProblems,
         [switch] $useSelfClosingTags,
@@ -160,12 +160,9 @@ function Sync-XliffTranslations {
     Write-Host "Processing unit nodes... (Please be patient)";
     [string] $progressMessage = "Syncing translation units.";
     if ($reportProgress) {
-        if ($AzureDevOps -ne 'no') {
-            Write-Host "##vso[task.setprogress value=0;]$progressMessage";
-        } else {
-            Write-Progress -Activity $progressMessage -PercentComplete 0;
-        }
+        Write-CIProgress -Message $progressMessage -PercentComplete 0 -ErrorSeverity $ErrorSeverity
     }
+    
 
     $mergedDocument.TranslationUnitNodes() | ForEach-Object {
         [System.Xml.XmlNode] $unit = $_;
@@ -174,11 +171,7 @@ function Sync-XliffTranslations {
             $i++;
             if ($i % $onePercentCount -eq 0) {
                 $percentage = ($i / $unitCount) * 100;
-                if ($AzureDevOps -ne 'no') {
-                    Write-Host "##vso[task.setprogress value=$percentage;]$progressMessage";
-                } else {
-                    Write-Progress -Activity $progressMessage -PercentComplete $percentage;
-                }
+                Write-CIProgress -Message $progressMessage -PercentComplete $percentage -ErrorSeverity $ErrorSeverity
             }
         }
 
@@ -289,16 +282,12 @@ function Sync-XliffTranslations {
     }
 
     if ($detectSourceTextChanges) {
-        Write-Host -ForegroundColor Yellow "Detected $($detectedSourceTextChanges.Count) source text change(s).";
+        Write-CIMessage -Type ($(if ($detectedSourceTextChanges.Count -lt 1) { "info" } else { "warning" })) -Message "Detected $($detectedSourceTextChanges.Count) source text change(s).";
 
         if ($printProblems -and $detectedSourceTextChanges) {
-            [string] $detectedMessage = "Detected source text change in unit '{0}'.";
-            if ($AzureDevOps -ne 'no') {
-                $detectedMessage = "##vso[task.logissue type=$AzureDevOps]$detectedMessage";
-            }
-
             $detectedSourceTextChanges | ForEach-Object {
-                Write-Host ($detectedMessage -f (Invoke-Command -ScriptBlock $FormatTranslationUnit -ArgumentList $_));
+                $unitMessage = "Detected source text change in unit '{0}'." -f (Invoke-Command -ScriptBlock $FormatTranslationUnit -ArgumentList $_)
+                Write-CIMessage -Type $ErrorSeverity -Message $unitMessage
             }
         }
     }

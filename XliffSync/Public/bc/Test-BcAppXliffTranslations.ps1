@@ -13,8 +13,8 @@
   Specifies whether to apply all technical validation rules.
  .Parameter restrictErrorsToLanguages
   Specifies languages to restrict errors to. For languages not in the list only warnings will be raised. If empty, then the setting of AzureDevOps applies to all languages.
-  .Parameter AzureDevOps
-  Specifies whether to generate Azure DevOps Pipeline compatible output. This setting determines the severity of errors.
+  .Parameter ErrorSeverity
+  Specifies whether to generate Azure DevOps Pipeline or GitHub Acitons compatible output. This setting determines the severity of errors.
  .Parameter reportProgress
   Specifies whether the command should report progress.
  .Parameter printProblems
@@ -33,6 +33,7 @@
  .Parameter testAdditionalParameters
  Specifies additional parameters to pass as arguments to the Test-XliffTranslations function that is invoked by this function.
 #>
+
 function Test-BcAppXliffTranslations {
     Param(
         [Parameter(Mandatory = $false)]
@@ -46,8 +47,8 @@ function Test-BcAppXliffTranslations {
         [Parameter(Mandatory = $false)]
         [string[]] $restrictErrorsToLanguages = @(),
         [Parameter(Mandatory = $false)]
-        [ValidateSet('no', 'error', 'warning')]
-        [string] $AzureDevOps = 'warning',
+        [ValidateSet('info', 'error', 'warning')]
+        [string] $ErrorSeverity = 'warning',
         [switch] $reportProgress,
         [switch] $printProblems,
         [switch] $printUnitsWithErrors,
@@ -59,6 +60,8 @@ function Test-BcAppXliffTranslations {
         $testAdditionalParameters = @{}
     )
 
+    $hasLoggedErrors = $false
+
     if ((-not $appFolders) -or ($appFolders.Length -eq 0)) {
         $appFolders = (Get-ChildItem $buildProjectFolder -Directory).Name
         Write-Host "-appFolders not explicitly set, using subfolders of $($buildProjectFolder): $appFolders"
@@ -69,7 +72,7 @@ function Test-BcAppXliffTranslations {
     }
 
     $appFolders | ForEach-Object {
-        Write-Host "##[group]Checking translations for `"$_`""
+        Write-CIMessage -Type group -Message "Checking translations for `"$($_)`""
         $appProjectFolder = Join-Path $buildProjectFolder $_
         $appTranslationsFolder = Join-Path $appProjectFolder "Translations"
         Write-Host "Retrieving translation files from $appTranslationsFolder"
@@ -79,20 +82,20 @@ function Test-BcAppXliffTranslations {
         $allUnitsWithIssues = @()
 
         foreach ($targetXliffFile in $targetXliffFiles) {
-            Write-Host "##[section]Processing `"$($targetXliffFile.BaseName)`""
+            Write-CIMessage -Type section -Message "Processing `"$($targetXliffFile.BaseName)`""
             $unitsWithIssues = @()
-            [string]$AzureDevOpsSeverityForFile = $AzureDevOps
-            if (($AzureDevOps -eq 'error') -and ($restrictErrorsToLanguages.Length -gt 0)) {
+            [string]$ErrorSeverityForFile = $ErrorSeverity
+            if (($ErrorSeverity -eq 'error') -and ($restrictErrorsToLanguages.Length -gt 0)) {
                 if ($null -eq ($restrictErrorsToLanguages | Where-Object { $targetXliffFile.Name -match $_ })) {
-                    $AzureDevOpsSeverityForFile = 'warning'
+                    $ErrorSeverityForFile = 'warning'
                 }
-                Write-Host "Translation error severity is '$AzureDevOpsSeverityForFile' for file $($targetXliffFile.FullName)"
+                Write-Host "Translation error severity is '$ErrorSeverityForFile' for file $($targetXliffFile.FullName)"
             }
 
             Write-Host "Syncing to file $($targetXliffFile.FullName)"
-            $unitsWithIssues += Sync-XliffTranslations -sourcePath $baseXliffFile.FullName -targetPath $targetXliffFile.FullName -AzureDevOps $AzureDevOpsSeverityForFile -reportProgress:$reportProgress -printProblems:$printProblems -useSelfClosingTags:$useSelfClosingTags -FormatTranslationUnit $FormatTranslationUnit @syncAdditionalParameters
+            $unitsWithIssues += Sync-XliffTranslations -sourcePath $baseXliffFile.FullName -targetPath $targetXliffFile.FullName -ErrorSeverity $ErrorSeverityForFile -reportProgress:$reportProgress -printProblems:$printProblems -useSelfClosingTags:$useSelfClosingTags -FormatTranslationUnit $FormatTranslationUnit @syncAdditionalParameters
             Write-Host "Checking translations in file $($targetXliffFile.FullName)"
-            $unitsWithIssues += Test-XliffTranslations -targetPath $targetXliffFile.FullName -checkForMissing -checkForProblems -translationRules $translationRules -translationRulesEnableAll:$translationRulesEnableAll -AzureDevOps $AzureDevOpsSeverityForFile -reportProgress:$reportProgress -FormatTranslationUnit $FormatTranslationUnit -printProblems:$printProblems @testAdditionalParameters
+            $unitsWithIssues += Test-XliffTranslations -targetPath $targetXliffFile.FullName -checkForMissing -checkForProblems -translationRules $translationRules -translationRulesEnableAll:$translationRulesEnableAll -ErrorSeverity $ErrorSeverityForFile -reportProgress:$reportProgress -FormatTranslationUnit $FormatTranslationUnit -printProblems:$printProblems @testAdditionalParameters
 
             $fileIssueCount = $unitsWithIssues.Count
             if ($fileIssueCount -gt 0) {
@@ -102,24 +105,38 @@ function Test-BcAppXliffTranslations {
                     Write-Host $unitsWithIssues
                 }
 
-                if ($AzureDevOpsSeverityForFile -eq 'error') {
+                if ($ErrorSeverityForFile -eq 'error') {
                     $allUnitsWithIssues += $unitsWithIssues
+                    $hasLoggedErrors = $true
                 }
             }
         }
 
-        if (@("error","warning").Contains($AzureDevOps) -and ($targetXliffFiles.Count -eq 0)) {
-            Write-Host "##vso[task.logissue type=$AzureDevOps]There are no target translation files for $($baseXliffFile.Name)"
+        if (@("error", "warning").Contains($ErrorSeverity) -and ($targetXliffFiles.Count -eq 0)) {
+            Write-CIMessage -Type $ErrorSeverity -Message "There are no target translation files for $($baseXliffFile.Name)"
+            if ($ErrorSeverity -eq 'error') {
+                $hasLoggedErrors = $true
+            }
         }
-        Write-Host "##[endgroup]"
+        Write-CIMessage -Type endgroup
 
         $issueCount = $allUnitsWithIssues.Count
-        if (($AzureDevOps -eq 'error') -and ($issueCount -gt 0)) {
-            Write-Host "##vso[task.logissue type=error]$issueCount issues detected in translation files!"
+        if (($ErrorSeverity -eq 'error') -and ($issueCount -gt 0)) {
+            Write-CIMessage -Type error -Message "$issueCount issues detected in translation files!"
+            $hasLoggedErrors = $true
+        }
+    }
+
+    if ($hasLoggedErrors) {
+        Write-CIMessage -Type error -Message "Failing pipeline due to translation issues."
+        if (-not (Is-GitHubActions)) {
             Write-Host "##vso[task.complete result=Failed;]Make step fail"
             exit 0
+        } else {
+            exit 1
         }
     }
 }
+
 Set-Alias -Name Check-BcAppXliffTranslations -Value Test-BcAppXliffTranslations
 Export-ModuleMember -Function Test-BcAppXliffTranslations -Alias Check-BcAppXliffTranslations

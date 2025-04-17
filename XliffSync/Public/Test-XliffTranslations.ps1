@@ -17,8 +17,8 @@
   Specifies which technical validation rules should be used.
  .Parameter translationRulesEnableAll
   Specifies whether to apply all technical validation rules.
- .Parameter AzureDevOps
-  Specifies whether to generate Azure DevOps Pipeline compatible output. This setting determines the severity of errors.
+ .Parameter ErrorSeverity
+  Specifies whether to generate Azure DevOps Pipeline or GitHub Acitons compatible output. This setting determines the severity of errors.
  .Parameter reportProgress
   Specifies whether the command should report progress.
  .Parameter printProblems
@@ -47,8 +47,8 @@ function Test-XliffTranslations {
         [Parameter(Mandatory = $false)]
         [switch] $translationRulesEnableAll,
         [Parameter(Mandatory = $false)]
-        [ValidateSet('no', 'error', 'warning')]
-        [string] $AzureDevOps = 'no',
+        [ValidateSet('info', 'error', 'warning')]
+        [string] $ErrorSeverity = 'info',
         [switch] $reportProgress,
         [switch] $printProblems,
         [ValidateNotNull()]
@@ -86,11 +86,7 @@ function Test-XliffTranslations {
     Write-Host "Processing unit nodes... (Please be patient)";
     [string] $progressMessage = "Checking translation units."
     if ($reportProgress) {
-        if ($AzureDevOps -ne 'no') {
-            Write-Host "##vso[task.setprogress value=0;]$progressMessage";
-        } else {
-            Write-Progress -Activity $progressMessage -PercentComplete 0;
-        }
+        Write-CIProgress -Message $progressMessage -PercentComplete 0 -ErrorSeverity $ErrorSeverity
     }
 
     $targetDocument.TranslationUnitNodes() | ForEach-Object {
@@ -100,11 +96,7 @@ function Test-XliffTranslations {
             $i++;
             if ($i % $onePercentCount -eq 0) {
                 $percentage = ($i / $unitCount) * 100;
-                if ($AzureDevOps -ne 'no') {
-                    Write-Host "##vso[task.setprogress value=$percentage;]$progressMessage";
-                } else {
-                    Write-Progress -Activity $progressMessage -PercentComplete $percentage;
-                }
+                Write-CIProgress -Message $progressMessage -PercentComplete $percentage -ErrorSeverity $ErrorSeverity
             }
         }
 
@@ -131,34 +123,26 @@ function Test-XliffTranslations {
         }
     }
 
-    [int] $missingCount = $missingTranslationUnits.Count;
+    [int] $missingCount = $missingTranslationUnits.Count
     if ($checkForMissing) {
-        Write-Host -ForegroundColor Yellow "Detected: $missingCount missing translation(s).";
+        Write-CIMessage -Type ($(if ($missingCount -lt 1) { "info" } else { "warning" })) -Message "Detected: $missingCount missing translation(s)."
 
         if ($printProblems -and $missingTranslationUnits) {
-            [string] $detectedMessage = "Missing translation in unit '{0}'.";
-            if ($AzureDevOps -ne 'no') {
-                $detectedMessage = "##vso[task.logissue type=$AzureDevOps]$detectedMessage";
-            }
-
             $missingTranslationUnits | ForEach-Object {
-                Write-Host ($detectedMessage -f (Invoke-Command -ScriptBlock $FormatTranslationUnit -ArgumentList $_));
+                $unitMessage = "Missing translation in unit '{0}'." -f (Invoke-Command -ScriptBlock $FormatTranslationUnit -ArgumentList $_)
+                Write-CIMessage -Type $ErrorSeverity -Message $unitMessage
             }
         }
     }
+    
 
     [int] $needWorkCount = $needWorkTranslationUnits.Count;
     if ($checkForProblems) {
-        Write-Host -ForegroundColor Yellow "Detected: $needWorkCount translation(s) that need work.";
+        Write-CIMessage -Type ($(if ($needWorkCount -lt 1) { "info" } else { "warning" })) -Message "Detected: $needWorkCount translation(s) that need work.";
 
         if ($printProblems -and $needWorkTranslationUnits) {
-            [string] $detectedMessage = "Translation issue in unit '{0}'.";
-            if ($AzureDevOps -ne 'no') {
-                $detectedMessage = "##vso[task.logissue type=$AzureDevOps]$detectedMessage";
-            }
-
             $needWorkTranslationUnits | ForEach-Object {
-                Write-Host ($detectedMessage -f (Invoke-Command -ScriptBlock $FormatTranslationUnit -ArgumentList $_));
+                Write-CIMessage -Type $ErrorSeverity -Message ("Translation issue in unit '{0}'." -f (Invoke-Command -ScriptBlock $FormatTranslationUnit -ArgumentList $_))
             }
         }
     }

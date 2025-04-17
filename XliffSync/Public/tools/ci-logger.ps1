@@ -1,0 +1,69 @@
+function Is-GitHubActions {
+    return $env:GITHUB_ACTIONS -eq "true"
+}
+
+function Is-AzureDevOps {
+    return [bool]$env:AGENT_NAME
+}
+
+function Write-CIMessage {
+    param (
+        [Parameter(Mandatory)]
+        [ValidateSet("group", "endgroup", "section", "error", "warning", "info")]
+        [string] $Type,
+
+        [Parameter(Mandatory = $false)]
+        [string] $Message
+    )
+
+    if (Is-GitHubActions) {
+        switch ($Type) {
+            "group" { Write-Host "::group::$Message" }
+            "endgroup" { Write-Host "::endgroup::" }
+            "section" { Write-Host "::group::$Message" }  # GitHub does not support "section", treat as "group"
+            "error" { Write-Host "::error::$Message" }
+            "warning" { Write-Host "::warning::$Message" }
+            default { Write-Host "$Message" }
+        }
+    } elseif (Is-AzureDevOps) {
+        switch ($Type) {
+            "group" { Write-Host "##[group]$Message" }
+            "endgroup" { Write-Host "##[endgroup]" }
+            "section" { Write-Host "##[section]$Message" }
+            "error" { Write-Host "##vso[task.logissue type=error]$Message" }
+            "warning" { Write-Host "##vso[task.logissue type=warning]$Message" }
+            default { Write-Host "$Message" }
+        }
+    } else {
+        # Fallback for local or unsupported environments
+        switch ($Type) {
+            "group"     { Write-Host ""; Write-Host "=== $Message ===" -ForegroundColor Cyan }
+            "endgroup"  { Write-Host "" }
+            "section"   { Write-Host ""; Write-Host "--- $Message ---" -ForegroundColor Cyan }
+            "error"     { Write-Host "[ERROR]   $Message" -ForegroundColor Red }
+            "warning"   { Write-Host "[WARNING] $Message" -ForegroundColor Yellow }
+            default     { Write-Host "[INFO]    $Message" }
+        }
+    }
+}
+
+function Write-CIProgress {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string] $Message,
+
+        [int] $PercentComplete = 0,
+
+        [ValidateSet("info", "warning", "error")]
+        [string] $ErrorSeverity
+    )
+
+    if (Is-GitHubActions) {
+        Write-CIMessage -Type info -Message "[Progress $PercentComplete%] $Message"
+    } elseif ($ErrorSeverity -ne 'info') {
+        Write-Host "##vso[task.setprogress value=$PercentComplete;]$Message"
+    } else {
+        Write-Progress -Activity $Message -PercentComplete $PercentComplete
+    }
+}
+
