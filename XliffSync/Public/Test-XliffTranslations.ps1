@@ -125,7 +125,7 @@ function Test-XliffTranslations {
 
     [int] $missingCount = $missingTranslationUnits.Count
     if ($checkForMissing) {
-        Write-CIMessage -Type warning -Message "Detected: $missingCount missing translation(s)."
+        Write-CIMessage -Type ($(if ($missingCount -lt 1) { "info" } else { "warning" })) -Message "Detected: $missingCount missing translation(s)."
 
         if ($printProblems -and $missingTranslationUnits) {
             $missingTranslationUnits | ForEach-Object {
@@ -138,7 +138,7 @@ function Test-XliffTranslations {
 
     [int] $needWorkCount = $needWorkTranslationUnits.Count;
     if ($checkForProblems) {
-        Write-CIMessage -Type warning -Message "Detected: $needWorkCount translation(s) that need work.";
+        Write-CIMessage -Type ($(if ($needWorkCount -lt 1) { "info" } else { "warning" })) -Message "Detected: $needWorkCount translation(s) that need work.";
 
         if ($printProblems -and $needWorkTranslationUnits) {
             $needWorkTranslationUnits | ForEach-Object {
